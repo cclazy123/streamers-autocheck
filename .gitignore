@@ -1,1 +1,13 @@
 node_modules
+# Local env
+.env
+# Puppeteer/profile temp
+tmp_chrome_profile/
+# Logs and debug artifacts
+logs/
+debug-*.png
+debug-*.html
+# OS / editor
+.DS_Store
+.vscode/
+npm-debug.log*
