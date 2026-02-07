@@ -1,0 +1,192 @@
+const cron = require('node-cron');
+const { supabase, serviceSupabase } = require('./db');
+const { checkLiveAndCapture } = require('./tiktok');
+const TaskQueue = require('./queue');
+const logger = require('./logger');
+
+// 创建任务队列（最多2个并发）
+const taskQueue = new TaskQueue(2);
+
+// 日志记录
+async function logSchedulerTask(username, status, message, screenshotId = null, errorMsg = null, durationMs = 0) {
+  try {
+    await supabase.from('scheduler_logs').insert([{
+      username,
+      status,
+      message,
+      screenshot_id: screenshotId,
+      error_message: errorMsg,
+      duration_ms: durationMs
+    }]);
+  } catch (err) {
+    console.error('Failed to log scheduler task:', err);
+  }
+}
+
+async function uploadToStorage(filename, buffer) {
+  const path = `screenshots/${filename}`;
+  const storageClient = serviceSupabase || supabase;
+  const { data, error } = await storageClient.storage.from('screenshots').upload(path, buffer, {
+    contentType: 'image/png',
+    upsert: false
+  }).catch(e => ({ error: e }));
+
+  if (error) {
+    throw error;
+  }
+
+  const { data: urlData } = storageClient.storage.from('screenshots').getPublicUrl(path);
+  return { path, publicURL: urlData.publicUrl };
+}
+
+async function processAccount(username) {
+  const startTime = Date.now();
+  try {
+    // 记录开始
+    await logSchedulerTask(username, 'checking', `Starting check for ${username}`);
+    logger.info(`Checking account: ${username}`);
+
+    // 检查直播和截图（只在直播时才返回 buffer）
+    const res = await checkLiveAndCapture(username);
+
+    // ✅ 只有在直播且成功截图时，才上传到 Supabase
+    if (res.live && res.buffer) {
+      try {
+        const filename = `${username}_${Date.now()}.png`;
+        const uploaded = await uploadToStorage(filename, res.buffer);
+        
+        const client = serviceSupabase || supabase;
+        logger.debug(`Using ${serviceSupabase ? 'service' : 'anon'} client for insert`, { username });
+        
+        const { data: inserted, error: insertError } = await client
+          .from('screenshots')
+          .insert([{ 
+            username, 
+            storage_path: uploaded.path, 
+            public_url: uploaded.publicURL
+          }])
+          .select();
+
+        if (insertError) throw insertError;
+
+        const durationMs = Date.now() - startTime;
+        await logSchedulerTask(
+          username, 
+          'captured', 
+          `Captured and uploaded screenshot for ${username}`,
+          inserted[0]?.id,
+          null,
+          durationMs
+        );
+
+        console.log(`✓ Captured and uploaded for ${username} (${durationMs}ms)`);
+        logger.info(`Captured screenshot for ${username}`, { durationMs });
+        return { success: true, captured: true };
+      } catch (uploadErr) {
+        const durationMs = Date.now() - startTime;
+        await logSchedulerTask(username, 'error', `Upload failed for ${username}`, null, uploadErr.message, durationMs);
+        logger.error(`Upload error for ${username}`, { error: uploadErr.message });
+        return { success: false, error: uploadErr.message };
+      }
+    } else {
+      // ❌ 账号不直播或无法获取截图 → 不上传任何内容，只记录状态
+      const durationMs = Date.now() - startTime;
+      const msg = res.error ? `Not live (${res.error})` : 'Not live';
+      await logSchedulerTask(username, 'not_live', msg, null, res.error, durationMs);
+      logger.info(`Not live: ${username}`, { error: res.error });
+      return { success: true, captured: false };
+    }
+  } catch (err) {
+    const durationMs = Date.now() - startTime;
+    await logSchedulerTask(username, 'error', `Error processing ${username}`, null, err.message, durationMs);
+    logger.error(`Error processing ${username}`, { error: err.message });
+    return { success: false, error: err.message };
+  }
+}
+
+async function runOnce() {
+  // 时间限制检查：只在 7:00-凌晨2:00 之间运行检查
+  // 允许的时间：7:00-23:59 和 00:00-02:00
+  // 禁止的时间：02:00-07:00（凌晨休息时段）
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  
+  // 检查是否在禁禁时段（2:00-7:00）
+  if (hour >= 2 && hour < 7) {
+    logger.info(`Sleeping time (${hour}:${minute < 10 ? '0' : ''}${minute}). No checks until 7:00. Next check: ${7 - hour}h ${60 - minute}m`);
+    return;
+  }
+
+  const { data: accounts, error } = await supabase
+    .from('accounts')
+    .select('username');
+
+  if (error) {
+    logger.error('Failed to fetch accounts', { error: error.message });
+    return;
+  }
+
+  if (!accounts || accounts.length === 0) {
+    logger.info('No accounts to check');
+    return;
+  }
+
+  logger.info(`Starting check cycle for ${accounts.length} accounts at ${hour}:${minute < 10 ? '0' : ''}${minute}...`);
+
+  // 使用队列管理并发处理账号
+  const promises = accounts.map(a => 
+    taskQueue.add(processAccount, [a.username], 2)
+  );
+
+  try {
+    await Promise.all(promises);
+  } catch (err) {
+    logger.error('Error during batch processing', { error: err.message });
+  }
+
+  // 等待所有任务完成
+  await taskQueue.drain();
+
+  const stats = taskQueue.getStats();
+  logger.info('Check cycle completed', {
+    total: stats.total,
+    completed: stats.completed,
+    failed: stats.failed
+  });
+}
+
+function startScheduler() {
+  logger.info('Scheduler starting...');
+  logger.info(`Task Queue max concurrent: ${taskQueue.maxConcurrent}`);
+  logger.info(`Service role available: ${!!serviceSupabase}`);
+  
+  // 环境变量已通过 .env 配置，用于 Puppeteer 的用户 profile 访问
+  if (process.env.PUPPETEER_USER_DATA_DIR) {
+    logger.info(`Using user data dir: ${process.env.PUPPETEER_USER_DATA_DIR}`);
+  }
+  if (process.env.CHROME_PATH) {
+    logger.info(`Using Chrome executable: ${process.env.CHROME_PATH}`);
+  }
+  
+  logger.info('Scheduler behavior:');
+  logger.info('  - Checks each account every 20 minutes');
+  logger.info('  - Only captures & uploads screenshots if account is LIVE');
+  logger.info('  - Active hours: 07:00 - 02:00 (sleeping 02:00 - 07:00)');
+  logger.info('  - No screenshots uploaded during sleep hours');
+  
+  // 立即运行一次
+  runOnce().catch(err => logger.error('Initial check failed', { error: err.message }));
+
+  // 每20分钟运行一次
+  cron.schedule('*/20 * * * *', () => {
+    logger.info('Scheduler triggered: checking accounts...');
+    runOnce().catch(err => logger.error('Scheduled check failed', { error: err.message }));
+  });
+
+  logger.info('Scheduler ready (running every 20 minutes)');
+}
+
+// 导出队列供诊断使用
+module.exports = { startScheduler, runOnce, taskQueue };
+

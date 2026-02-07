@@ -1,0 +1,173 @@
+/**
+ * Logger Module
+ * 
+ * 统一日志记录和管理
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+class Logger {
+  constructor(options = {}) {
+    this.logDir = options.logDir || './logs';
+    this.maxSize = options.maxSize || 10 * 1024 * 1024; // 10MB
+    this.maxFiles = options.maxFiles || 10;
+    
+    // 确保日志目录存在
+    if (!fs.existsSync(this.logDir)) {
+      fs.mkdirSync(this.logDir, { recursive: true });
+    }
+
+    this.levels = {
+      DEBUG: 0,
+      INFO: 1,
+      WARN: 2,
+      ERROR: 3
+    };
+
+    this.currentLevel = this.levels[process.env.LOG_LEVEL || 'INFO'];
+  }
+
+  /**
+   * 获取当前日志文件路径
+   */
+  getLogPath() {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return path.join(this.logDir, `scheduler-${year}${month}${day}.log`);
+  }
+
+  /**
+   * 轮转日志文件
+   */
+  rotateIfNeeded() {
+    const logPath = this.getLogPath();
+    
+    if (fs.existsSync(logPath)) {
+      const stats = fs.statSync(logPath);
+      if (stats.size > this.maxSize) {
+        const timestamp = Date.now();
+        const backupPath = logPath.replace('.log', `-${timestamp}.log`);
+        fs.renameSync(logPath, backupPath);
+        
+        // 清理旧文件
+        this.cleanupOldLogs();
+      }
+    }
+  }
+
+  /**
+   * 清理旧日志文件
+   */
+  cleanupOldLogs() {
+    try {
+      const files = fs.readdirSync(this.logDir)
+        .filter(f => f.startsWith('scheduler-') && f.endsWith('.log'))
+        .map(f => ({
+          name: f,
+          path: path.join(this.logDir, f),
+          time: fs.statSync(path.join(this.logDir, f)).mtime.getTime()
+        }))
+        .sort((a, b) => b.time - a.time);
+
+      // 保留最近的maxFiles个文件
+      for (let i = this.maxFiles; i < files.length; i++) {
+        fs.unlinkSync(files[i].path);
+      }
+    } catch (err) {
+      console.error('Error cleaning up old logs:', err);
+    }
+  }
+
+  /**
+   * 写入日志
+   */
+  write(level, message, meta = {}) {
+    if (this.levels[level] < this.currentLevel) {
+      return;
+    }
+
+    this.rotateIfNeeded();
+
+    const timestamp = new Date().toISOString();
+    const metaStr = Object.keys(meta).length > 0 ? ' ' + JSON.stringify(meta) : '';
+    const logMessage = `[${timestamp}] [${level}] ${message}${metaStr}\n`;
+
+    const logPath = this.getLogPath();
+    fs.appendFileSync(logPath, logMessage);
+
+    // 同时输出到控制台
+    const prefix = {
+      DEBUG: '🔍',
+      INFO: 'ℹ️',
+      WARN: '⚠️',
+      ERROR: '❌'
+    }[level];
+
+    console.log(`${prefix} [${level}] ${message}`, meta);
+  }
+
+  debug(message, meta) {
+    this.write('DEBUG', message, meta);
+  }
+
+  info(message, meta) {
+    this.write('INFO', message, meta);
+  }
+
+  warn(message, meta) {
+    this.write('WARN', message, meta);
+  }
+
+  error(message, meta) {
+    this.write('ERROR', message, meta);
+  }
+
+  /**
+   * 获取最近的日志内容
+   */
+  getRecentLogs(lines = 100) {
+    try {
+      const logPath = this.getLogPath();
+      
+      if (!fs.existsSync(logPath)) {
+        return [];
+      }
+
+      const content = fs.readFileSync(logPath, 'utf8');
+      return content.split('\n').filter(Boolean).slice(-lines);
+    } catch (err) {
+      console.error('Error reading logs:', err);
+      return [];
+    }
+  }
+
+  /**
+   * 获取所有日志文件列表
+   */
+  getLogFiles() {
+    try {
+      return fs.readdirSync(this.logDir)
+        .filter(f => f.startsWith('scheduler-') && f.endsWith('.log'))
+        .map(f => {
+          const filePath = path.join(this.logDir, f);
+          const stats = fs.statSync(filePath);
+          return {
+            name: f,
+            size: stats.size,
+            modified: stats.mtime,
+            path: f
+          };
+        })
+        .sort((a, b) => b.modified - a.modified);
+    } catch (err) {
+      console.error('Error listing logs:', err);
+      return [];
+    }
+  }
+}
+
+module.exports = new Logger();
