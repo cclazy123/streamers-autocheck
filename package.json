@@ -3,11 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "node src/index.js",
-    "start:local": "node src/index.js",
+    "start": "node -e \"console.log('Vercel deployment: use api/ functions')\"",
     "start:vercel": "node src/index-vercel.js",
     "worker": "node src/scheduler-worker.js",
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon src/local-runner.js",
     "local": "node src/local-runner.js"
   },
   "dependencies": {
