@@ -8,9 +8,9 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 require('dotenv').config();
 
-const { supabase } = require('./db');
-const { requireAuth, generateSessionToken } = require('./auth');
-const logger = require('./logger');
+const { supabase } = require('../src/db');
+const { requireAuth, generateSessionToken } = require('../src/auth');
+const logger = require('../src/logger');
 
 const app = express();
 app.use(cors());
