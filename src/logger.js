@@ -13,9 +13,13 @@ class Logger {
     this.maxSize = options.maxSize || 10 * 1024 * 1024; // 10MB
     this.maxFiles = options.maxFiles || 10;
     
-    // 确保日志目录存在
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
+        // 确保日志目录存在 (仅在非 Vercel 环境下)
+    if (!process.env.VERCEL && !fs.existsSync(this.logDir)) {
+      try {
+        fs.mkdirSync(this.logDir, { recursive: true });
+      } catch (e) {
+        console.warn('Could not create log directory (likely readonly fs):', e.message);
+      }
     }
 
     this.levels = {
@@ -32,6 +36,8 @@ class Logger {
    * 获取当前日志文件路径
    */
   getLogPath() {
+    if (process.env.VERCEL) return null; // Vercel 不使用文件日志
+    
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -44,18 +50,25 @@ class Logger {
    * 轮转日志文件
    */
   rotateIfNeeded() {
-    const logPath = this.getLogPath();
+    if (process.env.VERCEL) return;
     
-    if (fs.existsSync(logPath)) {
-      const stats = fs.statSync(logPath);
-      if (stats.size > this.maxSize) {
-        const timestamp = Date.now();
-        const backupPath = logPath.replace('.log', `-${timestamp}.log`);
-        fs.renameSync(logPath, backupPath);
-        
-        // 清理旧文件
-        this.cleanupOldLogs();
+    const logPath = this.getLogPath();
+    if (!logPath) return;
+
+    try {
+      if (fs.existsSync(logPath)) {
+        const stats = fs.statSync(logPath);
+        if (stats.size > this.maxSize) {
+          const timestamp = Date.now();
+          const backupPath = logPath.replace('.log', `-${timestamp}.log`);
+          fs.renameSync(logPath, backupPath);
+          
+          // 清理旧文件
+          this.cleanupOldLogs();
+        }
       }
+    } catch (e) {
+      // ignore fs errors in restricted envs
     }
   }
 
@@ -63,7 +76,10 @@ class Logger {
    * 清理旧日志文件
    */
   cleanupOldLogs() {
+    if (process.env.VERCEL) return;
     try {
+      if (!fs.existsSync(this.logDir)) return;
+      
       const files = fs.readdirSync(this.logDir)
         .filter(f => f.startsWith('scheduler-') && f.endsWith('.log'))
         .map(f => ({
@@ -90,15 +106,6 @@ class Logger {
       return;
     }
 
-    this.rotateIfNeeded();
-
-    const timestamp = new Date().toISOString();
-    const metaStr = Object.keys(meta).length > 0 ? ' ' + JSON.stringify(meta) : '';
-    const logMessage = `[${timestamp}] [${level}] ${message}${metaStr}\n`;
-
-    const logPath = this.getLogPath();
-    fs.appendFileSync(logPath, logMessage);
-
     // 同时输出到控制台
     const prefix = {
       DEBUG: '🔍',
@@ -108,6 +115,24 @@ class Logger {
     }[level];
 
     console.log(`${prefix} [${level}] ${message}`, meta);
+
+    // 如果是 Vercel 环境，直接返回，不写入文件
+    if (process.env.VERCEL) return;
+
+    try {
+      this.rotateIfNeeded();
+
+      const timestamp = new Date().toISOString();
+      const metaStr = Object.keys(meta).length > 0 ? ' ' + JSON.stringify(meta) : '';
+      const logMessage = `[${timestamp}] [${level}] ${message}${metaStr}\n`;
+
+      const logPath = this.getLogPath();
+      if (logPath) {
+        fs.appendFileSync(logPath, logMessage);
+      }
+    } catch (e) {
+      // ignore file write errors
+    }
   }
 
   debug(message, meta) {
@@ -129,11 +154,12 @@ class Logger {
   /**
    * 获取最近的日志内容
    */
-  getRecentLogs(lines = 100) {
+    getRecentLogs(lines = 100) {
+    if (process.env.VERCEL) return []; // Vercel has no local logs
     try {
       const logPath = this.getLogPath();
       
-      if (!fs.existsSync(logPath)) {
+      if (!logPath || !fs.existsSync(logPath)) {
         return [];
       }
 
@@ -148,8 +174,10 @@ class Logger {
   /**
    * 获取所有日志文件列表
    */
-  getLogFiles() {
+    getLogFiles() {
+    if (process.env.VERCEL) return [];
     try {
+      if (!fs.existsSync(this.logDir)) return [];
       return fs.readdirSync(this.logDir)
         .filter(f => f.startsWith('scheduler-') && f.endsWith('.log'))
         .map(f => {
