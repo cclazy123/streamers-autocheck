@@ -26,7 +26,7 @@ async function logSchedulerTask(username, status, message, screenshotId = null, 
 async function uploadToStorage(filename, buffer) {
   const path = `screenshots/${filename}`;
   const storageClient = serviceSupabase || supabase;
-  const { data, error } = await storageClient.storage.from('screenshots').upload(path, buffer, {
+  const { error } = await storageClient.storage.from('screenshots').upload(path, buffer, {
     contentType: 'image/png',
     upsert: false
   }).catch(e => ({ error: e }));
@@ -112,9 +112,9 @@ async function runOnce() {
   const hour = now.getHours();
   const minute = now.getMinutes();
   
-  // 检查是否在禁禁时段（2:00-7:00）
+    // 检查是否在禁禁时段（2:00-7:00）
   if (hour >= 2 && hour < 7) {
-    logger.info(`Sleeping time (${hour}:${minute < 10 ? '0' : ''}${minute}). No checks until 7:00. Next check: ${7 - hour}h ${60 - minute}m`);
+    logger.info(`Sleep mode active (Server time: ${hour}:${minute < 10 ? '0' : ''}${minute}). Active hours: 07:00-02:00.`);
     return;
   }
 

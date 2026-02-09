@@ -36,7 +36,7 @@ const taskQueue = new TaskQueue(2);
 
 async function uploadToStorage(username, buffer) {
   const fileName = `${username}_${Date.now()}.png`;
-  const { data, error } = await serviceSupabase.storage
+  const { error } = await serviceSupabase.storage
     .from('screenshots')
     .upload(`screenshots/${fileName}`, buffer, {
       contentType: 'image/png'

@@ -124,26 +124,32 @@ async function captureScreenshot(page, username) {
         try {
           const texts = ['Log in to TikTok', 'Try another browser', 'Sign in', 'Continue to watch'];
           const candidates = Array.from(document.querySelectorAll('div, section, dialog, [role="dialog"]'));
-          candidates.forEach(n => {
+                    candidates.forEach(n => {
             try {
               const txt = (n.innerText || '').slice(0, 200);
               if (texts.some(t => txt.includes(t))) n.remove();
-            } catch (e) { }
+            } catch (e) {
+              // ignore
+            }
           });
 
           // 通用遮罩/模态类名
           document.querySelectorAll('.modal, .overlay, .MuiModal-root, [data-e2e*="login"], [data-testid*="login"]').forEach(el => el.remove());
 
           // 尝试点击关闭按钮
-          Array.from(document.querySelectorAll('button')).forEach(b => {
+                    Array.from(document.querySelectorAll('button')).forEach(b => {
             try {
               const bt = (b.innerText || '').toLowerCase();
               if (bt.includes('close') || bt === '×' || bt === 'x' || bt.includes('cancel')) {
                 b.click();
               }
-            } catch (e) { }
+            } catch (e) {
+              // ignore
+            }
           });
-        } catch (e) { }
+        } catch (e) {
+          // ignore
+        }
       });
       // 给页面一点时间来应用变化
       await page.waitForTimeout(200);
@@ -265,10 +271,11 @@ async function checkLiveAndCapture(username, maxRetries = 3) {
       
       logger.debug(`Attempt ${attempt}/${maxRetries} - Launching browser for ${cleanUsername}`);
 
-      // 创建浏览器实例
+            // 创建浏览器实例
       // 注意：使用有头模式以支持 WebRTC 流的正确渲染
+      const isHeadless = process.env.HEADLESS !== 'false'; // Default to headless=new
       const launchOpts = {
-        headless: false, // ← 改为有头模式以支持 WebRTC
+        headless: isHeadless ? 'new' : false, 
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
