@@ -7,7 +7,8 @@
     "start:local": "node src/index.js",
     "start:vercel": "node src/index-vercel.js",
     "worker": "node src/scheduler-worker.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "local": "node src/local-runner.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.24.0",
