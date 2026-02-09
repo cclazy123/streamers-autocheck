@@ -1,0 +1,7 @@
+# Vercel ignore
+node_modules
+screenshots
+.git
+.env
+*.png
+logs
