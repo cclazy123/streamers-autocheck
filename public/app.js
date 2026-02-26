@@ -259,10 +259,12 @@ async function loadScreens(params = '') {
   // If no params provided (initial load or clear), check current filters
   if (!params) {
     const p = new URLSearchParams();
-    const startDate = document.getElementById('startDate').value;
-    const endDate = document.getElementById('endDate').value;
-    if (startDate) p.append('startDate', startDate);
-    if (endDate) p.append('endDate', endDate);
+    const startEl = document.getElementById('startDate');
+    const endEl = document.getElementById('endDate');
+    
+    if (startEl && startEl.value) p.append('startDate', startEl.value);
+    if (endEl && endEl.value) p.append('endDate', endEl.value);
+    
     params = p.toString();
   }
 
