@@ -386,13 +386,30 @@ async function checkLiveAndCapture(username, maxRetries = 3) {
       if (live) {
         logger.info(`✓ Live detected for ${cleanUsername}`);
         
-        // 等待直播流完全加载
-        logger.debug(`Live stream detected, waiting for WebRTC stream to initialize...`);
-        
-        // WebRTC 流需要大量时间和资源来初始化
+                // WebRTC 流需要大量时间和资源来初始化
         // 等待目标：主播的视频应该在浏览器中可见
-        for (let waitCount = 0; waitCount < 8; waitCount++) {
-          logger.debug(`Waiting for stream... (${(waitCount + 1) * 2}s / 16s total)`);
+        // 增加等待时间，从原来的 24s (12*2s) 增加到 40s (20*2s)
+        // 如果是深度检测(maxRetries > 3)，则等待时间更长 (30*2s = 60s)
+        const waitLoops = maxRetries > 3 ? 30 : 20;
+        const totalWaitTime = waitLoops * 2;
+        
+        for (let waitCount = 0; waitCount < waitLoops; waitCount++) {
+          logger.debug(`Waiting for stream... (${(waitCount + 1) * 2}s / ${totalWaitTime}s total)`);
+          
+          // 在等待过程中尝试模拟鼠标移动，以触发流加载
+          try {
+            await page.mouse.move(
+              100 + Math.random() * 500, 
+              100 + Math.random() * 500
+            );
+            // 偶尔滚动一下页面
+            if (waitCount % 3 === 0) {
+              await page.evaluate(() => window.scrollBy(0, 10));
+            }
+          } catch(e) {
+            // ignore
+          }
+          
           await page.waitForTimeout(2000);
         }
         

@@ -332,16 +332,28 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAccounts();
   });
 
-  // Date filters
-  document.getElementById('applyFilterBtn').addEventListener('click', () => {
-    loadScreens(); // Refresh screenshots with current date values
-  });
+    // Batch Delete
+  const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', deleteSelected);
+  }
 
-  document.getElementById('clearFilterBtn').addEventListener('click', () => {
-    document.getElementById('startDate').value = '';
-    document.getElementById('endDate').value = '';
-    loadScreens();
-  });
+  // Date filters
+  const applyFilterBtn = document.getElementById('applyFilterBtn');
+  if (applyFilterBtn) {
+    applyFilterBtn.addEventListener('click', () => {
+      loadScreens(); 
+    });
+  }
+
+  const clearFilterBtn = document.getElementById('clearFilterBtn');
+  if (clearFilterBtn) {
+    clearFilterBtn.addEventListener('click', () => {
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      loadScreens();
+    });
+  }
 
   // Modal close
   document.getElementById('modalClose').addEventListener('click', () => {
