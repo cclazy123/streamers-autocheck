@@ -238,6 +238,41 @@ app.delete('/screenshots/:id', requireAuth, async (req, res) => {
   res.json({ success: true, deleted: data[0] });
 });
 
+app.post('/screenshots/batch-delete', requireAuth, async (req, res) => {
+  const { ids } = req.body;
+  
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'No IDs provided' });
+  }
+
+  // 1. 获取要删除的记录（为了拿到 storage_path）
+  const { data: records, error: fetchErr } = await supabase
+    .from('screenshots')
+    .select('storage_path')
+    .in('id', ids);
+
+  if (fetchErr) {
+    return res.status(500).json({ error: String(fetchErr) });
+  }
+
+  // 2. 从 Storage 中删除文件
+  const paths = records.map(r => r.storage_path).filter(p => p);
+  if (paths.length > 0) {
+    await supabase.storage.from('screenshots').remove(paths);
+  }
+
+  // 3. 从数据库中删除记录
+  const { data, error } = await supabase
+    .from('screenshots')
+    .delete()
+    .in('id', ids)
+    .select();
+  
+  if (error) return res.status(500).json({ error: String(error) });
+  
+  res.json({ success: true, deletedCount: data.length });
+});
+
 // =====================
 // Health Check
 // =====================

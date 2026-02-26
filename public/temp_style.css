@@ -1,0 +1,7 @@
+      .screenshot-card.selected {
+        border: 2px solid #667eea;
+        background: #eef2ff;
+      }
+      .screenshot-card {
+        position: relative;
+      }
