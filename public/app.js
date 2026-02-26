@@ -177,6 +177,69 @@ async function deleteAccount(id) {
 }
 
 // ==========================================
+// Batch Operations
+// ==========================================
+
+let selectedScreenshots = new Set();
+
+function toggleSelection(id) {
+  if (selectedScreenshots.has(id)) {
+    selectedScreenshots.delete(id);
+  } else {
+    selectedScreenshots.add(id);
+  }
+  updateBatchUI();
+}
+
+function updateBatchUI() {
+  const btn = document.getElementById('bulkDeleteBtn');
+  if (!btn) return;
+  
+  if (selectedScreenshots.size > 0) {
+    btn.style.display = 'block';
+    btn.textContent = `Delete Selected (${selectedScreenshots.size})`;
+  } else {
+    btn.style.display = 'none';
+  }
+
+  // Update card styles
+  document.querySelectorAll('.screenshot-card').forEach(card => {
+    const id = parseInt(card.dataset.id);
+    const checkbox = card.querySelector('.checkbox');
+    if (selectedScreenshots.has(id)) {
+      card.classList.add('selected');
+      if (checkbox) checkbox.checked = true;
+    } else {
+      card.classList.remove('selected');
+      if (checkbox) checkbox.checked = false;
+    }
+  });
+}
+
+async function deleteSelected() {
+  if (selectedScreenshots.size === 0) return;
+  
+  if (!confirm(`Are you sure you want to delete ${selectedScreenshots.size} screenshots? This cannot be undone.`)) {
+    return;
+  }
+
+  const result = await api('/screenshots/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids: Array.from(selectedScreenshots) })
+  });
+
+  if (!result || result.error) {
+    showStatus('error', 'Failed to delete screenshots: ' + (result?.error || 'Unknown error'));
+    return;
+  }
+
+  showStatus('success', `Deleted ${result.deletedCount} screenshots`);
+  selectedScreenshots.clear();
+  updateBatchUI();
+  loadScreens();
+}
+
+// ==========================================
 // Screenshots
 // ==========================================
 
@@ -215,9 +278,12 @@ async function loadScreens(params = '') {
     return;
   }
 
-  root.innerHTML = '<div class="screenshots-grid">' + 
+    root.innerHTML = '<div class="screenshots-grid">' + 
     items.map(s => `
-      <div class="screenshot-card">
+      <div class="screenshot-card" data-id="${s.id}" onclick="if(!event.target.closest('button') && !event.target.closest('img')) toggleSelection(${s.id})">
+        <div style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+          <input type="checkbox" class="checkbox" ${selectedScreenshots.has(s.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelection(${s.id})" style="transform: scale(1.5); cursor: pointer;">
+        </div>
         <img class="screenshot-image" src="${s.public_url}" onclick="previewImage('${s.public_url}')" alt="${s.username}" />
         <div class="screenshot-info">
           <div class="screenshot-username">@${s.username}</div>
@@ -338,19 +404,21 @@ document.addEventListener('DOMContentLoaded', () => {
     bulkDeleteBtn.addEventListener('click', deleteSelected);
   }
 
-  // Date filters
-  const applyFilterBtn = document.getElementById('applyFilterBtn');
-  if (applyFilterBtn) {
-    applyFilterBtn.addEventListener('click', () => {
-      loadScreens(); 
+    // Date filters
+  const applyBtn = document.getElementById('applyFilterBtn');
+  if (applyBtn) {
+    applyBtn.addEventListener('click', () => {
+      loadScreens();
     });
   }
 
-  const clearFilterBtn = document.getElementById('clearFilterBtn');
-  if (clearFilterBtn) {
-    clearFilterBtn.addEventListener('click', () => {
-      document.getElementById('startDate').value = '';
-      document.getElementById('endDate').value = '';
+  const clearBtn = document.getElementById('clearFilterBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const startEl = document.getElementById('startDate');
+      const endEl = document.getElementById('endDate');
+      if (startEl) startEl.value = '';
+      if (endEl) endEl.value = '';
       loadScreens();
     });
   }
