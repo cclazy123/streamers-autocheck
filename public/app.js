@@ -108,15 +108,15 @@ async function loadAccounts() {
   }
 
   root.innerHTML = accounts.map(a => `
-    <div class="account">
-      <div>
+    <div class="account" onclick="viewScreenshots('${a.username}')" style="cursor: pointer;">
+      <div style="flex: 1;">
         <strong>${a.username}</strong>
         ${a.country ? `<span style="margin-left: 10px; background: #667eea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${a.country}</span>` : ''}
         <div style="font-size: 12px; color: #999;">Added ${formatDate(a.created_at)}</div>
       </div>
       <div style="display: flex; gap: 8px;">
-        <button onclick="viewScreenshots('${a.username}')" class="secondary" style="padding: 6px 12px; font-size: 14px;">View</button>
-        <button onclick="deleteAccount(${a.id})" class="danger" style="padding: 6px 12px; font-size: 14px;">Delete</button>
+        <button onclick="event.stopPropagation(); viewScreenshots('${a.username}')" class="secondary" style="padding: 6px 12px; font-size: 14px;">View</button>
+        <button onclick="event.stopPropagation(); deleteAccount(${a.id})" class="danger" style="padding: 6px 12px; font-size: 14px;">Delete</button>
       </div>
     </div>
   `).join('');
