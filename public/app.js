@@ -182,10 +182,27 @@ async function deleteAccount(id) {
 
 async function viewScreenshots(username) {
   const params = new URLSearchParams({ username });
+  
+  // Append date filters if they exist in the UI
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+
   await loadScreens(params.toString());
 }
 
 async function loadScreens(params = '') {
+  // If no params provided (initial load or clear), check current filters
+  if (!params) {
+    const p = new URLSearchParams();
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    if (startDate) p.append('startDate', startDate);
+    if (endDate) p.append('endDate', endDate);
+    params = p.toString();
+  }
+
   const query = params ? `?${params}` : '';
   const items = await api(`/screenshots${query}`);
   
@@ -310,9 +327,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') addAccount();
   });
 
-  // Country filter
+    // Country filter
   document.getElementById('countryFilter').addEventListener('change', () => {
     loadAccounts();
+  });
+
+  // Date filters
+  document.getElementById('applyFilterBtn').addEventListener('click', () => {
+    loadScreens(); // Refresh screenshots with current date values
+  });
+
+  document.getElementById('clearFilterBtn').addEventListener('click', () => {
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    loadScreens();
   });
 
   // Modal close
