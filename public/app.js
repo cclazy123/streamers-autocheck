@@ -1,3 +1,4 @@
+/* eslint-env browser */
 // ==========================================
 // Application State
 // ==========================================
@@ -363,6 +364,14 @@ function previewImage(url) {
   img.src = url;
   modal.classList.add('active');
 }
+
+// Export functions for HTML onclick attributes
+window.viewScreenshots = viewScreenshots;
+window.deleteAccount = deleteAccount;
+window.rateScreenshot = rateScreenshot;
+window.deleteScreenshot = deleteScreenshot;
+window.previewImage = previewImage;
+window.toggleSelection = toggleSelection;
 
 // ==========================================
 // Event Listeners
