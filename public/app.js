@@ -4,6 +4,7 @@
 
 let sessionToken = localStorage.getItem('sessionToken');
 let isAuthenticated = !!sessionToken;
+let currentUsername = null; // Store current filter state
 
 // ==========================================
 // API Helper
@@ -107,8 +108,8 @@ async function loadAccounts() {
     return;
   }
 
-  root.innerHTML = accounts.map(a => `
-    <div class="account" onclick="viewScreenshots('${a.username}')" style="cursor: pointer;">
+    root.innerHTML = accounts.map(a => `
+    <div class="account" data-username="${a.username}" onclick="viewScreenshots('${a.username}')" style="cursor: pointer; position: relative;">
       <div style="flex: 1;">
         <strong>${a.username}</strong>
         ${a.country ? `<span style="margin-left: 10px; background: #667eea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${a.country}</span>` : ''}
@@ -244,39 +245,53 @@ async function deleteSelected() {
 // ==========================================
 
 async function viewScreenshots(username) {
-  const params = new URLSearchParams({ username });
+  // Update global state
+  currentUsername = username;
   
-  // Append date filters if they exist in the UI
-  const startDate = document.getElementById('startDate').value;
-  const endDate = document.getElementById('endDate').value;
-  if (startDate) params.append('startDate', startDate);
-  if (endDate) params.append('endDate', endDate);
+  // Highlight active account in the list
+  document.querySelectorAll('.account').forEach(el => {
+    if (el.dataset.username === username) {
+      el.classList.add('active');
+      el.style.borderLeft = '4px solid #667eea';
+      el.style.backgroundColor = '#eef2ff';
+    } else {
+      el.classList.remove('active');
+      el.style.borderLeft = 'none';
+      el.style.backgroundColor = '#f8f9fa';
+    }
+  });
 
-  await loadScreens(params.toString());
+  await loadScreens();
 }
 
 async function loadScreens(params = '') {
-  // If no params provided (initial load or clear), check current filters
-  if (!params) {
-    const p = new URLSearchParams();
-    const startEl = document.getElementById('startDate');
-    const endEl = document.getElementById('endDate');
-    
-    if (startEl && startEl.value) p.append('startDate', startEl.value);
-    if (endEl && endEl.value) p.append('endDate', endEl.value);
-    
-    params = p.toString();
+  // Construct query parameters
+  const p = new URLSearchParams(params);
+  
+  // 1. Add Username filter (if selected)
+  if (currentUsername) {
+    p.set('username', currentUsername);
   }
 
-  const query = params ? `?${params}` : '';
+  // 2. Add Date filters (if set in UI)
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  
+  if (startEl && startEl.value) p.set('startDate', startEl.value);
+  if (endEl && endEl.value) p.set('endDate', endEl.value);
+
+  const query = p.toString() ? `?${p.toString()}` : '';
+  
+  // Show loading state
+  const root = document.getElementById('screens');
+  if (root) root.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+
   const items = await api(`/screenshots${query}`);
   
   if (!items) return;
 
-  const root = document.getElementById('screens');
-
   if (!items || items.length === 0) {
-    root.innerHTML = '<div class="empty-state">No screenshots available</div>';
+    root.innerHTML = `<div class="empty-state">No screenshots available ${currentUsername ? 'for @' + currentUsername : ''} in this range</div>`;
     return;
   }
 
@@ -414,13 +429,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const clearBtn = document.getElementById('clearFilterBtn');
+    const clearBtn = document.getElementById('clearFilterBtn');
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       const startEl = document.getElementById('startDate');
       const endEl = document.getElementById('endDate');
       if (startEl) startEl.value = '';
       if (endEl) endEl.value = '';
+      
+      // Reset username selection too if desired, or keep it
+      // currentUsername = null; 
+      // document.querySelectorAll('.account').forEach(el => {
+      //   el.classList.remove('active');
+      //   el.style.backgroundColor = '#f8f9fa';
+      // });
+
       loadScreens();
     });
   }
