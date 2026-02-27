@@ -6,6 +6,28 @@ const path = require('path');
 const os = require('os');
 const logger = require('./logger');
 
+// 额外等待“视频帧可渲染”信号，避免过早截图
+async function waitForRenderableStream(page, username, timeoutMs = 45000) {
+  try {
+    await page.waitForFunction(() => {
+      const v = document.querySelector('video');
+      return v && v.readyState >= 3; // HAVE_FUTURE_DATA
+    }, { timeout: timeoutMs });
+    return true;
+  } catch (e) {
+    logger.warn(`Stream not confirmed renderable for ${username}: ${e.message}`);
+    return false;
+  }
+}
+
+async function isLikelyBlackScreen(page, buffer, username, minBytes = Number(process.env.MIN_SCREENSHOT_BYTES || 28000)) {
+  if (!buffer || buffer.length < minBytes) {
+    logger.warn(`Likely black screen for ${username} (size: ${buffer ? buffer.length : 0} < ${minBytes})`);
+    return true;
+  }
+  return false;
+}
+
 // 检查是否处于直播页面
 async function isOnLivePage(page) {
   try {
@@ -255,15 +277,68 @@ async function captureScreenshot(page, username) {
   }
 }
 
+async function captureScreenshotWithRetry(page, username, maxCaptureAttempts = 3, minScreenshotBytes = Number(process.env.MIN_SCREENSHOT_BYTES || 28000)) {
+  for (let attempt = 1; attempt <= maxCaptureAttempts; attempt++) {
+    const buffer = await captureScreenshot(page, username);
+    if (!buffer) {
+      logger.warn(`Screenshot attempt ${attempt} returned null for ${username}`);
+      continue;
+    }
+    
+    const black = await isLikelyBlackScreen(page, buffer, username, minScreenshotBytes);
+    if (!black) {
+      if (attempt > 1) {
+        logger.info(`✓ Recovered non-black screenshot on attempt ${attempt}/${maxCaptureAttempts} for ${username}`);
+      }
+      return buffer;
+    }
+    
+    if (attempt < maxCaptureAttempts) {
+      logger.info(`Retrying capture for ${username} (attempt ${attempt}/${maxCaptureAttempts})`);
+      await page.waitForTimeout(2000);
+    }
+  }
+  return null;
+}
+
+function normalizeCheckLiveArgs(maxRetriesOrOptions = 3, maybeOptions = {}) {
+  let maxRetries = 3;
+  let options = {};
+
+  if (typeof maxRetriesOrOptions === 'number') {
+    maxRetries = maxRetriesOrOptions;
+  } else if (maxRetriesOrOptions && typeof maxRetriesOrOptions === 'object') {
+    options = { ...maxRetriesOrOptions };
+  }
+
+  if (maybeOptions && typeof maybeOptions === 'object') {
+    options = { ...options, ...maybeOptions };
+  }
+
+  maxRetries = Number.isFinite(maxRetries) ? maxRetries : 3;
+  return { maxRetries, options };
+}
+
 // 带重试的检查和截图
-async function checkLiveAndCapture(username, maxRetries = 3) {
+async function checkLiveAndCapture(username, maxRetriesOrOptions = 3, maybeOptions = {}) {
+  const { maxRetries, options } = normalizeCheckLiveArgs(maxRetriesOrOptions, maybeOptions);
+
   let browser = null;
   let lastError = null;
 
   // 清理用户名：移除前导的 @
   const cleanUsername = username.replace(/^@+/, '').trim();
 
-  logger.info(`Starting live check for: ${cleanUsername}`);
+  const runtimePolicy = options.policy || {};
+  const dynamicMinScreenshotBytes = Number(runtimePolicy.minScreenshotBytes || process.env.MIN_SCREENSHOT_BYTES || 28000);
+  const dynamicCaptureAttempts = Number(runtimePolicy.captureAttempts || 3);
+
+  logger.info(`Starting live check for: ${cleanUsername}`, {
+    country: options.country || null,
+    minScreenshotBytes: dynamicMinScreenshotBytes,
+    captureAttempts: dynamicCaptureAttempts,
+    streamWaitLoops: runtimePolicy.streamWaitLoops || null
+  });
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -386,11 +461,11 @@ async function checkLiveAndCapture(username, maxRetries = 3) {
       if (live) {
         logger.info(`✓ Live detected for ${cleanUsername}`);
         
-                // WebRTC 流需要大量时间和资源来初始化
+                        // WebRTC 流需要大量时间和资源来初始化
         // 等待目标：主播的视频应该在浏览器中可见
         // 增加等待时间，从原来的 24s (12*2s) 增加到 40s (20*2s)
         // 如果是深度检测(maxRetries > 3)，则等待时间更长 (30*2s = 60s)
-        const waitLoops = maxRetries > 3 ? 30 : 20;
+        const waitLoops = Number(runtimePolicy.streamWaitLoops || (maxRetries > 3 ? 30 : 20));
         const totalWaitTime = waitLoops * 2;
         
         for (let waitCount = 0; waitCount < waitLoops; waitCount++) {
@@ -434,10 +509,17 @@ async function checkLiveAndCapture(username, maxRetries = 3) {
           };
         });
         
-        logger.debug(`Page media status:`, mediaInfo);
+                logger.debug(`Page media status:`, mediaInfo);
         
-        // 使用优化的截图方法（canvas-first）
-        const buffer = await captureScreenshot(page, cleanUsername);
+        // 额外等待“视频帧可渲染”信号，避免过早截图
+        const renderableTimeoutMs = Number(runtimePolicy.renderableTimeoutMs || (maxRetries > 3 ? 70000 : 45000));
+        const renderable = await waitForRenderableStream(page, cleanUsername, renderableTimeoutMs);
+        if (!renderable) {
+          logger.warn(`Proceeding with capture fallback for ${cleanUsername} (renderable stream not confirmed)`);
+        }
+
+        // 使用优化的截图方法，并加入黑屏识别重试
+        const buffer = await captureScreenshotWithRetry(page, cleanUsername, dynamicCaptureAttempts, dynamicMinScreenshotBytes);
         await browser.close();
         // cleanup temporary profile copy
         if (tmpProfileDir && fs.existsSync(tmpProfileDir)) {

@@ -1,0 +1,21 @@
+{
+  "byCountry": {
+    "VN": {
+      "minScreenshotBytes": 42000,
+      "streamWaitLoops": 28,
+      "captureAttempts": 4
+    },
+    "MY": {
+      "minScreenshotBytes": 36000,
+      "streamWaitLoops": 24,
+      "captureAttempts": 3
+    }
+  },
+  "byUsername": {
+    "yanyangtian.net": {
+      "minScreenshotBytes": 52000,
+      "streamWaitLoops": 32,
+      "captureAttempts": 5
+    }
+  }
+}

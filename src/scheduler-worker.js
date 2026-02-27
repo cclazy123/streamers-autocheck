@@ -8,6 +8,7 @@ require('dotenv').config();
 const { checkLiveAndCapture } = require('./tiktok');
 const { serviceSupabase } = require('./db');
 const logger = require('./logger');
+const { loadOverrides, collectRecentStats, getDynamicCapturePolicy, OVERRIDE_PATH } = require('./capture-strategy');
 
 // 并发控制（同时运行最多 2 个账号抓图）
 class TaskQueue {
@@ -54,12 +55,27 @@ async function uploadToStorage(username, buffer) {
   return urlData.publicUrl;
 }
 
-async function processAccount(username) {
+async function processAccount(account, context) {
+  const username = account.username;
+  const country = account.country || null;
   try {
     logger.info(`Processing account: ${username}`);
     
+    // 动态策略
+    const policy = getDynamicCapturePolicy({
+      username,
+      country,
+      stats: context.stats,
+      overrides: context.overrides
+    });
+
+    logger.info(`Dynamic capture policy for ${username}`, { country, ...policy });
+
     // 检测是否直播并获取截图
-    const res = await checkLiveAndCapture(username);
+    const res = await checkLiveAndCapture(username, 3, {
+      country,
+      policy
+    });
     
     if (!res.live) {
       logger.info(`Not live: ${username}`);
@@ -124,10 +140,10 @@ async function runOnce() {
 
   logger.info(`Starting check cycle at ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
 
-  // 获取所有账号
+    // 获取所有账号
   const { data: accounts, error } = await serviceSupabase
     .from('accounts')
-    .select('username');
+    .select('username, country');
 
   if (error) {
     logger.error('Failed to fetch accounts', { error: error.message });
@@ -139,11 +155,24 @@ async function runOnce() {
     return;
   }
 
-  logger.info(`Checking ${accounts.length} accounts`);
+    logger.info(`Checking ${accounts.length} accounts`);
+
+  const accountMap = new Map(accounts.map(a => [a.username, a.country || 'DEFAULT']));
+  const overrides = loadOverrides();
+  const stats = collectRecentStats(accountMap, Number(process.env.CAPTURE_STRATEGY_LOG_FILES || 5));
+
+  logger.info('Dynamic capture strategy initialized', {
+    accounts: accounts.length,
+    overrideFile: OVERRIDE_PATH,
+    usernamesWithStats: stats.byUsername.size,
+    countriesWithStats: stats.byCountry.size
+  });
+
+  const context = { overrides, stats };
 
   // 并发处理所有账号
   const results = await Promise.all(
-    accounts.map(a => taskQueue.add(() => processAccount(a.username)))
+    accounts.map(a => taskQueue.add(() => processAccount(a, context)))
   );
 
   const completed = results.filter(r => !r.error).length;
