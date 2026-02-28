@@ -4,6 +4,7 @@
 // ==========================================
 
 let sessionToken = localStorage.getItem('sessionToken');
+let userRole = localStorage.getItem('userRole'); // 'admin' or 'guest'
 let isAuthenticated = !!sessionToken;
 let currentUsername = null; // Store current filter state
 
@@ -44,16 +45,19 @@ async function api(path, opts = {}) {
 // Authentication
 // ==========================================
 
-function login(password) {
+function login(password, isGuest = false) {
+  const payload = isGuest ? { isGuest: true } : { password };
   return api('/login', {
     method: 'POST',
-    body: JSON.stringify({ password })
+    body: JSON.stringify(payload)
   });
 }
 
 function logout() {
   sessionToken = null;
+  userRole = null;
   localStorage.removeItem('sessionToken');
+  localStorage.removeItem('userRole');
   isAuthenticated = false;
   showAuthUI();
 }
@@ -66,6 +70,29 @@ function showAuthUI() {
 function showAppUI() {
   document.getElementById('loginForm').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  
+  // UI adjustments based on role
+  const userStatus = document.getElementById('userStatus');
+  const addBtn = document.getElementById('addBtn');
+  const bulkDelBtn = document.getElementById('bulkDeleteBtn');
+  const adminPanelBtn = document.getElementById('adminPanelBtn');
+
+  if (userRole === 'guest') {
+    userStatus.textContent = 'Guest View (Read Only)';
+    userStatus.style.color = '#666';
+    if (addBtn) addBtn.style.display = 'none';
+    if (bulkDelBtn) bulkDelBtn.style.display = 'none'; // Guest cannot bulk delete
+    if (adminPanelBtn) {
+      adminPanelBtn.style.display = 'block';
+      adminPanelBtn.textContent = 'Login as Admin';
+      adminPanelBtn.onclick = logout; // Simply logout to go back to login screen
+    }
+  } else {
+    userStatus.textContent = 'Admin Mode';
+    userStatus.style.color = '#667eea';
+    if (addBtn) addBtn.style.display = 'inline-block';
+    if (adminPanelBtn) adminPanelBtn.style.display = 'none';
+  }
 }
 
 // ==========================================
@@ -109,7 +136,7 @@ async function loadAccounts() {
     return;
   }
 
-    root.innerHTML = accounts.map(a => `
+      root.innerHTML = accounts.map(a => `
     <div class="account" data-username="${a.username}" onclick="viewScreenshots('${a.username}')" style="cursor: pointer; position: relative;">
       <div style="flex: 1;">
         <strong>${a.username}</strong>
@@ -118,7 +145,7 @@ async function loadAccounts() {
       </div>
       <div style="display: flex; gap: 8px;">
         <button onclick="event.stopPropagation(); viewScreenshots('${a.username}')" class="secondary" style="padding: 6px 12px; font-size: 14px;">View</button>
-        <button onclick="event.stopPropagation(); deleteAccount(${a.id})" class="danger" style="padding: 6px 12px; font-size: 14px;">Delete</button>
+        ${userRole === 'admin' ? `<button onclick="event.stopPropagation(); deleteAccount(${a.id})" class="danger" style="padding: 6px 12px; font-size: 14px;">Delete</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -196,6 +223,12 @@ function toggleSelection(id) {
 function updateBatchUI() {
   const btn = document.getElementById('bulkDeleteBtn');
   if (!btn) return;
+  
+  // Guest cannot bulk delete
+  if (userRole !== 'admin') {
+    btn.style.display = 'none';
+    return;
+  }
   
   if (selectedScreenshots.size > 0) {
     btn.style.display = 'block';
@@ -318,9 +351,9 @@ async function loadScreens(params = '') {
             ).join('')}
           </div>
 
-          <div class="screenshot-actions">
+                    <div class="screenshot-actions">
             <button class="secondary" onclick="previewImage('${s.public_url}')" style="flex: 1;">Preview</button>
-            <button class="danger" onclick="deleteScreenshot(${s.id})" style="flex: 1;">Delete</button>
+            ${userRole === 'admin' ? `<button class="danger" onclick="deleteScreenshot(${s.id})" style="flex: 1;">Delete</button>` : ''}
           </div>
         </div>
       </div>
@@ -397,14 +430,36 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    sessionToken = result.session_token;
+        sessionToken = result.session_token;
+    userRole = result.role; // 'admin' or 'guest'
     localStorage.setItem('sessionToken', sessionToken);
+    localStorage.setItem('userRole', userRole);
     isAuthenticated = true;
     document.getElementById('password').value = '';
     showAppUI();
     loadAccounts();
     loadScreens();
   });
+
+  // Guest Login
+  const guestBtn = document.getElementById('guestLoginBtn');
+  if (guestBtn) {
+    guestBtn.addEventListener('click', async () => {
+      const result = await login(null, true); // isGuest = true
+      if (result && result.success) {
+        sessionToken = result.session_token;
+        userRole = result.role;
+        localStorage.setItem('sessionToken', sessionToken);
+        localStorage.setItem('userRole', userRole);
+        isAuthenticated = true;
+        showAppUI();
+        loadAccounts();
+        loadScreens();
+      } else {
+        showStatus('error', 'Guest login failed', 'loginStatus');
+      }
+    });
+  }
 
   // Logout
   document.getElementById('logoutBtn').addEventListener('click', () => {
