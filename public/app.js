@@ -56,6 +56,7 @@ async function login(password, isGuest = false) {
 function logout() {
   sessionToken = null;
   userRole = null;
+  currentUsername = null; // Clear filter
   localStorage.removeItem('sessionToken');
   localStorage.removeItem('userRole');
   isAuthenticated = false;
@@ -79,6 +80,9 @@ function showAppUI() {
   const addBtn = document.getElementById('addBtn');
   const bulkDelBtn = document.getElementById('bulkDeleteBtn');
   const adminPanelBtn = document.getElementById('adminPanelBtn');
+  // Account input fields
+  const usernameInput = document.getElementById('username');
+  const countrySelect = document.getElementById('country');
 
   if (userStatus) {
     if (userRole === 'guest') {
@@ -90,17 +94,22 @@ function showAppUI() {
     }
   }
 
-  if (userRole === 'guest') {
-    if (addBtn) addBtn.style.display = 'none';
-    if (bulkDelBtn) bulkDelBtn.style.display = 'none';
-    if (adminPanelBtn) {
+  // Hide/Show Admin features
+  const isAdmin = userRole === 'admin';
+  
+  if (addBtn) addBtn.style.display = isAdmin ? 'inline-block' : 'none';
+  if (bulkDelBtn && !isAdmin) bulkDelBtn.style.display = 'none'; // Only hide for guest, admin shows on selection
+  if (usernameInput) usernameInput.style.display = isAdmin ? 'inline-block' : 'none';
+  if (countrySelect) countrySelect.parentElement.querySelector('#country') ? (document.getElementById('country').style.display = isAdmin ? 'inline-block' : 'none') : null;
+
+  if (adminPanelBtn) {
+    if (!isAdmin) {
       adminPanelBtn.style.display = 'block';
       adminPanelBtn.textContent = 'Login as Admin';
       adminPanelBtn.onclick = logout;
+    } else {
+      adminPanelBtn.style.display = 'none';
     }
-  } else {
-    if (addBtn) addBtn.style.display = 'inline-block';
-    if (adminPanelBtn) adminPanelBtn.style.display = 'none';
   }
 }
 
@@ -201,6 +210,12 @@ async function addAccount() {
 }
 
 async function deleteAccount(id) {
+  // Prevent guests from deleting
+  if (userRole !== 'admin') {
+    alert('Guest users cannot delete accounts.');
+    return;
+  }
+
   if (!confirm('Are you sure you want to delete this account and all its screenshots?')) {
     return;
   }
@@ -392,6 +407,12 @@ async function rateScreenshot(id, rating) {
 }
 
 async function deleteScreenshot(id) {
+  // Prevent guests from deleting
+  if (userRole !== 'admin') {
+    alert('Guest users cannot delete screenshots.');
+    return;
+  }
+
   if (!confirm('Delete this screenshot?')) {
     return;
   }
