@@ -411,35 +411,38 @@ window.toggleSelection = toggleSelection;
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Login
-  document.getElementById('loginBtn').addEventListener('click', async () => {
-    const password = document.getElementById('password').value;
-    if (!password) {
-      showStatus('error', 'Please enter password', 'loginStatus');
-      return;
-    }
+    // Login
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', async () => {
+      const password = document.getElementById('password').value;
+      if (!password) {
+        showStatus('error', 'Please enter password', 'loginStatus');
+        return;
+      }
 
-    const result = await login(password);
-    if (!result) {
-      showStatus('error', 'Login failed', 'loginStatus');
-      return;
-    }
+      const result = await login(password);
+      if (!result) {
+        showStatus('error', 'Login failed', 'loginStatus');
+        return;
+      }
 
-    if (result.error) {
-      showStatus('error', 'Invalid password', 'loginStatus');
-      return;
-    }
+      if (result.error) {
+        showStatus('error', 'Invalid password', 'loginStatus');
+        return;
+      }
 
-        sessionToken = result.session_token;
-    userRole = result.role; // 'admin' or 'guest'
-    localStorage.setItem('sessionToken', sessionToken);
-    localStorage.setItem('userRole', userRole);
-    isAuthenticated = true;
-    document.getElementById('password').value = '';
-    showAppUI();
-    loadAccounts();
-    loadScreens();
-  });
+      sessionToken = result.session_token;
+      userRole = result.role; // 'admin' or 'guest'
+      localStorage.setItem('sessionToken', sessionToken);
+      localStorage.setItem('userRole', userRole);
+      isAuthenticated = true;
+      document.getElementById('password').value = '';
+      showAppUI();
+      loadAccounts();
+      loadScreens();
+    });
+  }
 
   // Guest Login
   const guestBtn = document.getElementById('guestLoginBtn');
@@ -461,23 +464,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Logout
-  document.getElementById('logoutBtn').addEventListener('click', () => {
-    api('/logout', { method: 'POST' }).finally(() => {
-      logout();
+    // Logout
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      api('/logout', { method: 'POST' }).finally(() => {
+        logout();
+      });
     });
-  });
+  }
 
-  // Add account
-  document.getElementById('addBtn').addEventListener('click', addAccount);
-  document.getElementById('username').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') addAccount();
-  });
+    // Add account
+  const addBtn = document.getElementById('addBtn');
+  const userInp = document.getElementById('username');
+  
+  if (addBtn) {
+    addBtn.addEventListener('click', addAccount);
+  }
+  
+  if (userInp) {
+    userInp.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addAccount();
+    });
+  }
 
-    // Country filter
-  document.getElementById('countryFilter').addEventListener('change', () => {
-    loadAccounts();
-  });
+  // Country filter
+  const countryFilter = document.getElementById('countryFilter');
+  if (countryFilter) {
+    countryFilter.addEventListener('change', () => {
+      loadAccounts();
+    });
+  }
 
     // Batch Delete
   const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
