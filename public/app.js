@@ -45,7 +45,7 @@ async function api(path, opts = {}) {
 // Authentication
 // ==========================================
 
-function login(password, isGuest = false) {
+async function login(password, isGuest = false) {
   const payload = isGuest ? { isGuest: true } : { password };
   return api('/login', {
     method: 'POST',
@@ -163,6 +163,9 @@ async function loadAccounts() {
 async function addAccount() {
   const input = document.getElementById('username');
   const countrySelect = document.getElementById('country');
+  
+  if (!input || !countrySelect) return;
+
   const username = input.value.trim();
   const country = countrySelect.value.trim();
   
@@ -202,16 +205,20 @@ async function deleteAccount(id) {
     return;
   }
 
+  // Ensure ID is passed correctly
   const result = await api(`/accounts/${id}`, { method: 'DELETE' });
 
   if (!result || result.error) {
-    showStatus('error', 'Failed to delete account');
+    showStatus('error', 'Failed to delete account: ' + (result?.error || 'Unknown error'));
     return;
   }
 
   showStatus('success', 'Account deleted successfully');
-  loadAccounts();
-  loadScreens();
+  // Refresh UI
+  await loadAccounts();
+  // Clear screenshots view if the deleted account was selected
+  const screensDiv = document.getElementById('screens');
+  if (screensDiv) screensDiv.innerHTML = '';
 }
 
 // ==========================================
@@ -453,11 +460,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Guest Login
+    // Guest Login
   const guestBtn = document.getElementById('guestLoginBtn');
   if (guestBtn) {
     guestBtn.addEventListener('click', async () => {
+      console.log('Guest login clicked');
       const result = await login(null, true); // isGuest = true
+      console.log('Guest login result:', result);
+      
       if (result && result.success) {
         sessionToken = result.session_token;
         userRole = result.role;
@@ -468,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadAccounts();
         loadScreens();
       } else {
-        showStatus('error', 'Guest login failed', 'loginStatus');
+        showStatus('error', 'Guest login failed: ' + (result?.error || 'Unknown error'), 'loginStatus');
       }
     });
   }
