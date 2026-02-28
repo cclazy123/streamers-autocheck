@@ -68,8 +68,11 @@ function showAuthUI() {
 }
 
 function showAppUI() {
-  document.getElementById('loginForm').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
+  const loginForm = document.getElementById('loginForm');
+  const app = document.getElementById('app');
+  
+  if (loginForm) loginForm.style.display = 'none';
+  if (app) app.style.display = 'block';
   
   // UI adjustments based on role
   const userStatus = document.getElementById('userStatus');
@@ -77,19 +80,25 @@ function showAppUI() {
   const bulkDelBtn = document.getElementById('bulkDeleteBtn');
   const adminPanelBtn = document.getElementById('adminPanelBtn');
 
+  if (userStatus) {
+    if (userRole === 'guest') {
+      userStatus.textContent = 'Guest View (Read Only)';
+      userStatus.style.color = '#666';
+    } else {
+      userStatus.textContent = 'Admin Mode';
+      userStatus.style.color = '#667eea';
+    }
+  }
+
   if (userRole === 'guest') {
-    userStatus.textContent = 'Guest View (Read Only)';
-    userStatus.style.color = '#666';
     if (addBtn) addBtn.style.display = 'none';
-    if (bulkDelBtn) bulkDelBtn.style.display = 'none'; // Guest cannot bulk delete
+    if (bulkDelBtn) bulkDelBtn.style.display = 'none';
     if (adminPanelBtn) {
       adminPanelBtn.style.display = 'block';
       adminPanelBtn.textContent = 'Login as Admin';
-      adminPanelBtn.onclick = logout; // Simply logout to go back to login screen
+      adminPanelBtn.onclick = logout;
     }
   } else {
-    userStatus.textContent = 'Admin Mode';
-    userStatus.style.color = '#667eea';
     if (addBtn) addBtn.style.display = 'inline-block';
     if (adminPanelBtn) adminPanelBtn.style.display = 'none';
   }
