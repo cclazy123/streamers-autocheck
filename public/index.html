@@ -369,7 +369,16 @@
     </style>
   </head>
   <body>
-    <div class="container">
+        <div class="container">
+      <div id="loginForm" class="login-section">
+        <h2>TikTok Live Screenshots</h2>
+        <p style="margin-bottom: 20px; color: #666;">Enter password to manage accounts</p>
+        <input id="password" type="password" placeholder="Password" />
+        <button id="loginBtn">Login as Admin</button>
+        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+          <button id="guestLoginBtn" class="secondary" style="width: 100%;">Continue as Guest</button>
+        </div>
+        <div class="status-message" id="loginStatus"></div>
       </div>
 
       <div id="app" style="display: none;">
@@ -377,6 +386,7 @@
           <h1>📹 TikTok Live Screenshots</h1>
           <div class="header-actions">
             <span id="userStatus"></span>
+            <button id="adminPanelBtn" class="secondary" style="display: none;">Admin</button>
             <button id="logoutBtn" class="secondary">Logout</button>
           </div>
         </header>
