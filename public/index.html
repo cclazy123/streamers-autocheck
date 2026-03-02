@@ -270,7 +270,7 @@
         display: flex;
       }
 
-      .modal-content {
+            .modal-content {
         background: white;
         border-radius: 12px;
         max-width: 800px;
@@ -278,6 +278,13 @@
         overflow: auto;
         padding: 30px;
         position: relative;
+      }
+
+      @media (max-width: 480px) {
+        .modal-content {
+          width: 90%;
+          padding: 20px;
+        }
       }
 
       .modal-close {

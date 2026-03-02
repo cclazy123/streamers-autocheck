@@ -107,13 +107,13 @@ function showAppUI() {
   // Handle country select wrapper if needed, or just the select
   if (countrySelect) countrySelect.style.display = isAdmin ? 'inline-block' : 'none';
 
-  if (adminPanelBtn) {
-    if (!isAdmin) {
+    if (adminPanelBtn) {
+    if (isAdmin) {
+      adminPanelBtn.style.display = 'none';
+    } else {
       adminPanelBtn.style.display = 'block';
       adminPanelBtn.textContent = 'Login as Admin';
       adminPanelBtn.onclick = logout;
-    } else {
-      adminPanelBtn.style.display = 'none';
     }
   }
 }
@@ -188,8 +188,8 @@ async function addAccount() {
     return;
   }
 
-  if (!country) {
-    showStatus('error', 'Please select a country');
+  if (!country || country === '') {
+    showStatus('error', 'Please select a valid country');
     return;
   }
 
@@ -288,7 +288,10 @@ function updateBatchUI() {
 }
 
 async function deleteSelected() {
-  if (selectedScreenshots.size === 0) return;
+  if (selectedScreenshots.size === 0) {
+    showStatus('error', 'Please select screenshots to delete');
+    return;
+  }
   
   if (!confirm(`Are you sure you want to delete ${selectedScreenshots.size} screenshots? This cannot be undone.`)) {
     return;
