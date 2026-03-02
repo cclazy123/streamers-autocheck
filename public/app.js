@@ -97,10 +97,15 @@ function showAppUI() {
   // Hide/Show Admin features
   const isAdmin = userRole === 'admin';
   
+  // Ensure elements exist before styling
   if (addBtn) addBtn.style.display = isAdmin ? 'inline-block' : 'none';
-  if (bulkDelBtn && !isAdmin) bulkDelBtn.style.display = 'none'; // Only hide for guest, admin shows on selection
+  // Only hide bulk delete for guest initially; admin logic handles showing it on selection
+  if (bulkDelBtn && !isAdmin) bulkDelBtn.style.display = 'none'; 
+  
   if (usernameInput) usernameInput.style.display = isAdmin ? 'inline-block' : 'none';
-  if (countrySelect) countrySelect.parentElement.querySelector('#country') ? (document.getElementById('country').style.display = isAdmin ? 'inline-block' : 'none') : null;
+  
+  // Handle country select wrapper if needed, or just the select
+  if (countrySelect) countrySelect.style.display = isAdmin ? 'inline-block' : 'none';
 
   if (adminPanelBtn) {
     if (!isAdmin) {
